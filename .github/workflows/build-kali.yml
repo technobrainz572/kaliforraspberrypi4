@@ -26,18 +26,17 @@ jobs:
       - name: Set TERM Environment Variable
         run: echo "TERM=dumb" >> $GITHUB_ENV
 
-      - name: Build Custom Kali Image
+      - name: Build Custom Kali Image (Show Full Errors)
         run: |
           cd kali-arm
           sudo bash -x ./raspberry-pi.sh 2>&1 | tee build.log
-
-      - name: Debug - Check If Image Exists
-        run: |
-          echo "Checking if images were created..."
-          ls -lh kali-arm/images/ || echo "No images found!"
+          exit ${PIPESTATUS[0]}
 
       - name: Debug - Find Image File Anywhere
-        run: find kali-arm/ -type f -name "*.img.xz" || echo "No image files found!"
+        run: |
+          echo "Searching for built image..."
+          find / -type f -name "*.img.xz" > found_images.txt || echo "No image files found!"
+          cat found_images.txt
 
       - name: Upload Build Logs (If Build Fails)
         if: failure()
@@ -46,9 +45,18 @@ jobs:
           name: build-logs
           path: kali-arm/build.log
 
-      - name: Upload Image as Artifact
+      - name: Upload Image as Artifact (Using Correct Path)
         if: success()
+        run: |
+          IMAGE_PATH=$(cat found_images.txt | head -n 1)
+          if [[ -f "$IMAGE_PATH" ]]; then
+            echo "Uploading image from: $IMAGE_PATH"
+            mv "$IMAGE_PATH" kali-linux-raspberrypi.img.xz
+          else
+            echo "No image file found!"
+            exit 1
+          fi
         uses: actions/upload-artifact@v4
         with:
           name: kali-linux-raspberrypi
-          path: kali-arm/images/*.img.xz
+          path: kali-linux-raspberrypi.img.xz
