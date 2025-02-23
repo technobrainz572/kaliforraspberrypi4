@@ -14,7 +14,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y systemd-container debootstrap qemu-user-static \
-          systemd-nspawn curl wget git mmdebstrap eatmydata ncurses-bin || exit 1
+          curl wget git mmdebstrap eatmydata ncurses-bin || exit 1
 
       - name: Clone Kali ARM Build Scripts
         run: |
