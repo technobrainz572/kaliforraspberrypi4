@@ -10,7 +10,7 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
         with:
-          platforms: arm
+          platforms: arm64
 
       - name: Install Dependencies
         run: |
@@ -23,10 +23,13 @@ jobs:
           cd kali-arm
           chmod +x raspberry-pi.sh
 
+      - name: Set TERM Environment Variable
+        run: echo "export TERM=dumb" >> $GITHUB_ENV
+
       - name: Build Custom Kali Image
         run: |
           cd kali-arm
-          sudo ./raspberry-pi.sh 2>&1 | tee build.log
+          sudo bash -x ./raspberry-pi.sh 2>&1 | tee build.log
 
       - name: Debug: List Files in Images Directory
         run: |
@@ -41,7 +44,7 @@ jobs:
           echo "Checking if build completed..."
           tail -n 50 kali-arm/build.log || echo "No build log found!"
 
-      - name: Debug: Upload Build Logs (If Build Fails)
+      - name: Upload Build Logs (If Build Fails)
         if: failure()
         uses: actions/upload-artifact@v4
         with:
