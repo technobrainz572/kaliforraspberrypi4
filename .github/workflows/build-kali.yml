@@ -16,6 +16,9 @@ jobs:
           sudo apt update
           sudo apt install -y git curl qemu-user-static debootstrap coreutils systemd-container
 
+      - name: Set Safe TERM Variable
+        run: echo "TERM=xterm-256color" >> $GITHUB_ENV
+
       - name: Clone Kali ARM build scripts
         run: |
           git clone https://gitlab.com/kalilinux/build-scripts/kali-arm.git
@@ -24,6 +27,7 @@ jobs:
 
       - name: Run Raspberry Pi build script
         run: |
+          export TERM=xterm
           cd kali-arm
           sudo bash -x ./raspberry-pi.sh 2>&1 | tee build.log
           exit ${PIPESTATUS[0]}
