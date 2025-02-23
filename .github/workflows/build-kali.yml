@@ -16,7 +16,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y git curl qemu-user-static debootstrap coreutils \
-          dbus less locales ncurses-bin || (echo "APT INSTALL FAILED" && exit 1)
+          dbus less locales ncurses-bin systemd-container || (echo "APT INSTALL FAILED" && exit 1)
 
       - name: Clone Kali ARM Build Scripts
         run: |
@@ -24,8 +24,10 @@ jobs:
           cd kali-arm
           chmod +x raspberry-pi.sh
 
-      - name: Prepare Build Log
-        run: touch kali-arm/build.log
+      - name: Run Required Dependency Script
+        run: |
+          cd kali-arm
+          sudo ./common.d/build_deps.sh
 
       - name: Set Safe TERM Variable
         run: echo "TERM=xterm-256color" >> $GITHUB_ENV
