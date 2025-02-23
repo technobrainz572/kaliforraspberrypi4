@@ -8,31 +8,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install Required Dependencies
         run: |
           sudo apt update
-          sudo apt install -y git curl qemu-user-static debootstrap coreutils systemd-container
+          sudo apt install -y git curl qemu-user-static debootstrap coreutils systemd-container gnupg
+
+      - name: Install kali-archive-keyring
+        run: |
+          wget https://kali.download/kali/pool/main/k/kali-archive-keyring/kali-archive-keyring_2024.1_all.deb
+          sudo dpkg -i kali-archive-keyring_2024.1_all.deb
+          rm kali-archive-keyring_2024.1_all.deb
 
       - name: Set Safe TERM Variable
         run: echo "TERM=xterm-256color" >> $GITHUB_ENV
 
-      - name: Clone Kali ARM build scripts
+      - name: Clone Kali ARM Build Scripts
         run: |
           git clone https://gitlab.com/kalilinux/build-scripts/kali-arm.git
           cd kali-arm
           chmod +x *.sh
 
-      - name: Run Raspberry Pi build script
+      - name: Run Raspberry Pi Build Script
         run: |
           export TERM=xterm
           cd kali-arm
           sudo bash -x ./raspberry-pi.sh 2>&1 | tee build.log
           exit ${PIPESTATUS[0]}
 
-      - name: Upload build logs
+      - name: Upload Build Logs
         uses: actions/upload-artifact@v4
         with:
           name: build-logs
