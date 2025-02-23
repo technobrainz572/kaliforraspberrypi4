@@ -31,20 +31,13 @@ jobs:
           cd kali-arm
           sudo bash -x ./raspberry-pi.sh 2>&1 | tee build.log
 
-      - name: Debug - List Files in Images Directory
+      - name: Debug - Check If Image Exists
         run: |
           echo "Checking if images were created..."
           ls -lh kali-arm/images/ || echo "No images found!"
 
       - name: Debug - Find Image File Anywhere
-        run: |
-          echo "Searching for .img.xz files..."
-          find kali-arm/ -type f -name "*.img.xz" || echo "No image files found!"
-
-      - name: Debug - Check Build Status
-        run: |
-          echo "Checking if build completed..."
-          tail -n 50 kali-arm/build.log || echo "No build log found!"
+        run: find kali-arm/ -type f -name "*.img.xz" || echo "No image files found!"
 
       - name: Upload Build Logs (If Build Fails)
         if: failure()
