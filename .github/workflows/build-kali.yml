@@ -1,4 +1,4 @@
-name: Build Kali Linux for Raspberry Pi
+name: Build Kali ARM Image
 
 on:
   workflow_dispatch:
@@ -8,56 +8,36 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Required Dependencies
+      - name: Install dependencies
         run: |
           sudo apt update
-          sudo apt install -y git curl qemu-user-static debootstrap coreutils \
-          systemd-container || exit 1
+          sudo apt install -y git curl qemu-user-static debootstrap coreutils systemd-container
 
-      - name: Clone Kali ARM Build Scripts
+      - name: Clone Kali ARM build scripts
         run: |
           git clone https://gitlab.com/kalilinux/build-scripts/kali-arm.git
           cd kali-arm
+          chmod +x *.sh
 
-      - name: Run Build Dependency Script
+      - name: Run Raspberry Pi build script
         run: |
-          cd kali-arm
-          chmod +x common.d/build_deps.sh
-          sudo ./common.d/build_deps.sh || exit 1
-
-      - name: Set Safe TERM Variable
-        run: echo "TERM=xterm-256color" >> $GITHUB_ENV
-
-      - name: Build Kali ARM Image
-        run: |
-          export TERM=xterm
           cd kali-arm
           sudo bash -x ./raspberry-pi.sh 2>&1 | tee build.log
           exit ${PIPESTATUS[0]}
 
-      - name: Debug - Show Build Logs
-        if: failure()
-        run: cat kali-arm/build.log || echo "No build log found!"
-
-      - name: Debug - List Files in Image Directory
-        run: ls -lah kali-arm/images || true
-
-      - name: Debug - Find All Files in Build Directory
-        run: find kali-arm -type f || echo "No files found!"
-
-      - name: Upload Build Logs (If Build Fails)
-        if: failure()
+      - name: Upload build logs
         uses: actions/upload-artifact@v4
         with:
           name: build-logs
           path: kali-arm/build.log
+          if-no-files-found: warn
 
-      - name: Upload Built Image
-        if: success() && hashFiles('kali-arm/images/*.img.xz') != ''
+      - name: Upload Kali Linux Image
         uses: actions/upload-artifact@v4
         with:
           name: kali-linux-raspberrypi
           path: kali-arm/images/*.img.xz
+          if-no-files-found: warn
