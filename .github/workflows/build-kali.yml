@@ -23,6 +23,9 @@ jobs:
           cd kali-arm
           chmod +x raspberry-pi.sh
 
+      - name: Set TERM Environment Variable
+        run: echo "export TERM=xterm" >> ~/.bashrc
+
       - name: Build Custom Kali Image
         run: |
           cd kali-arm
