@@ -10,23 +10,23 @@ jobs:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
         with:
-          platforms: arm64
+          platforms: arm
 
       - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y git curl
+          sudo apt install -y git curl qemu-user-static debootstrap
 
       - name: Clone Kali ARM Build Scripts
         run: |
           git clone https://gitlab.com/kalilinux/build-scripts/kali-arm.git
           cd kali-arm
-          chmod +x build.sh
+          chmod +x raspberry-pi.sh
 
       - name: Build Custom Kali Image
         run: |
           cd kali-arm
-          sudo ./build.sh --board raspberry-pi --arch arm64 --variant minimal --verbose
+          sudo ./raspberry-pi.sh
 
       - name: Upload Image as Artifact
         uses: actions/upload-artifact@v4
