@@ -15,7 +15,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y git curl qemu-user-static debootstrap
+          sudo apt install -y git curl qemu-user-static debootstrap coreutils
 
       - name: Clone Kali ARM Build Scripts
         run: |
@@ -23,16 +23,17 @@ jobs:
           cd kali-arm
           chmod +x raspberry-pi.sh
 
-      - name: Set TERM Environment Variable
-        run: |
-          echo "export TERM=xterm" >> ~/.bashrc
-          echo "export TERM=xterm" >> ~/.profile
-          export TERM=xterm
-
       - name: Build Custom Kali Image
         run: |
           cd kali-arm
-          sudo ./raspberry-pi.sh
+          sudo TERM=dumb bash -x ./raspberry-pi.sh | tee build.log
+
+      - name: Upload Logs if Build Fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: kali-arm/build.log
 
       - name: Upload Image as Artifact
         uses: actions/upload-artifact@v4
