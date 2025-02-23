@@ -1,0 +1,56 @@
+name: Build Custom Kali Linux for Raspberry Pi
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: arm
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git curl qemu-user-static debootstrap coreutils
+
+      - name: Clone Kali ARM Build Scripts
+        run: |
+          git clone https://gitlab.com/kalilinux/build-scripts/kali-arm.git
+          cd kali-arm
+          chmod +x raspberry-pi.sh
+
+      - name: Build Custom Kali Image
+        run: |
+          cd kali-arm
+          sudo ./raspberry-pi.sh 2>&1 | tee build.log
+
+      - name: Debug: List Files in Images Directory
+        run: |
+          echo "Checking if images were created..."
+          ls -lh kali-arm/images/ || echo "No images found!"
+
+      - name: Debug: Find Image File Anywhere
+        run: find kali-arm/ -type f -name "*.img.xz" || echo "No image files found!"
+
+      - name: Debug: Check Build Status
+        run: |
+          echo "Checking if build completed..."
+          tail -n 50 kali-arm/build.log || echo "No build log found!"
+
+      - name: Debug: Upload Build Logs (If Build Fails)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: kali-arm/build.log
+
+      - name: Upload Image as Artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kali-linux-raspberrypi
+          path: kali-arm/images/*.img.xz
