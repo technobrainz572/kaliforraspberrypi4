@@ -15,7 +15,8 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y git curl qemu-user-static debootstrap coreutils
+          sudo apt install -y git curl qemu-user-static debootstrap coreutils \
+          tput dbus less locales
 
       - name: Clone Kali ARM Build Scripts
         run: |
@@ -23,14 +24,20 @@ jobs:
           cd kali-arm
           chmod +x raspberry-pi.sh
 
-      - name: Set TERM Environment Variable
-        run: echo "TERM=dumb" >> $GITHUB_ENV
+      - name: Set Safe TERM Variable
+        run: echo "TERM=xterm-256color" >> $GITHUB_ENV
 
       - name: Build Custom Kali Image (Show Full Errors)
         run: |
           cd kali-arm
           sudo bash -x ./raspberry-pi.sh 2>&1 | tee build.log
           exit ${PIPESTATUS[0]}
+
+      - name: Debug - Show Full Build Log
+        if: failure()
+        run: |
+          echo "Dumping full build log..."
+          cat kali-arm/build.log
 
       - name: Debug - Find Image File Anywhere
         run: |
