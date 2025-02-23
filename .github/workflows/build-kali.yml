@@ -15,7 +15,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y git curl qemu-user-static debootstrap
+          sudo apt install -y git curl qemu-user-static debootstrap coreutils
 
       - name: Clone Kali ARM Build Scripts
         run: |
@@ -23,8 +23,11 @@ jobs:
           cd kali-arm
           chmod +x raspberry-pi.sh
 
-      - name: Set TERM Environment Variable
-        run: echo "export TERM=xterm" >> ~/.bashrc
+      - name: Fix TERM Variable to Prevent `tput` Error
+        run: |
+          echo "export TERM=dumb" >> ~/.bashrc
+          echo "export TERM=dumb" >> ~/.profile
+          export TERM=dumb
 
       - name: Build Custom Kali Image
         run: |
