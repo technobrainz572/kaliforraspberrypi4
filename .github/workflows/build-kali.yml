@@ -1,0 +1,47 @@
+name: Build Custom Kali Linux for Raspberry Pi
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git bc bison flex libssl-dev make libc6-dev-arm64-cross gcc-aarch64-linux-gnu debootstrap qemu-user-static
+
+      - name: Clone Kali Linux ARM Build Scripts
+        run: |
+          git clone https://gitlab.com/kalilinux/build-scripts/kali-arm
+          cd kali-arm
+          ./build-debian-rootfs --arch arm64 --variant minimal kali-arm64
+
+      - name: Compile Custom Bluetooth-Enhanced Kernel
+        run: |
+          git clone --depth=1 --branch v6.6 https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git
+          cd linux
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- menuconfig
+          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-
+          sudo make modules_install ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- INSTALL_MOD_PATH=/mnt/kali-arm64
+          sudo cp arch/arm64/boot/Image /mnt/kali-arm64/boot/kernel8.img
+
+      - name: Build Custom Kali Linux Image
+        run: |
+          cd kali-arm
+          ./build.sh --arch arm64 --variant full kali-arm64
+
+      - name: Upload Image as Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: kali-linux-raspberrypi
+          path: kali-arm/output/kali-linux-arm64.img
