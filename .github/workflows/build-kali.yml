@@ -37,21 +37,22 @@ jobs:
           sudo bash -x ./raspberry-pi.sh 2>&1 | tee build.log
           exit ${PIPESTATUS[0]}
 
-      - name: Debug - List Files in Images Directory
-        run: ls -lah kali-arm/images || true
+      - name: Debug - Show Build Logs
+        if: failure()
+        run: cat kali-arm/build.log || echo "No build log found!"
 
-      - name: Debug - Find Image File Anywhere
-        run: find kali-arm -type f || true
+      - name: Debug - Find All Files in Build Directory
+        run: find kali-arm -type f || echo "No files found!"
 
       - name: Upload Build Logs (If Build Fails)
-        if: ${{ failure() }}
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: build-logs
           path: kali-arm/build.log
 
       - name: Upload Built Image
-        if: ${{ success() }}
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: kali-linux-raspberrypi
