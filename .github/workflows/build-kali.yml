@@ -12,17 +12,20 @@ jobs:
         with:
           platforms: arm64
 
-      - name: Install Dependencies
+      - name: Install Dependencies (Debug)
         run: |
           sudo apt update
           sudo apt install -y git curl qemu-user-static debootstrap coreutils \
-          tput dbus less locales
+          dbus less locales ncurses-bin || (echo "APT INSTALL FAILED" && exit 1)
 
       - name: Clone Kali ARM Build Scripts
         run: |
           git clone https://gitlab.com/kalilinux/build-scripts/kali-arm.git
           cd kali-arm
           chmod +x raspberry-pi.sh
+
+      - name: Prepare Build Log
+        run: touch kali-arm/build.log
 
       - name: Set Safe TERM Variable
         run: echo "TERM=xterm-256color" >> $GITHUB_ENV
@@ -37,7 +40,7 @@ jobs:
         if: failure()
         run: |
           echo "Dumping full build log..."
-          cat kali-arm/build.log
+          cat kali-arm/build.log || echo "No build log found!"
 
       - name: Debug - Find Image File Anywhere
         run: |
