@@ -1,4 +1,4 @@
-name: Build Custom Kali Linux for Raspberry Pi
+name: Build Kali Linux for Raspberry Pi
 
 on:
   workflow_dispatch:
@@ -21,6 +21,15 @@ jobs:
           git clone https://gitlab.com/kalilinux/build-scripts/kali-arm.git
           cd kali-arm
 
+      - name: Run Build Dependency Script
+        run: |
+          cd kali-arm
+          chmod +x common.d/build_deps.sh
+          sudo ./common.d/build_deps.sh || exit 1
+
+      - name: Set Safe TERM Variable
+        run: echo "TERM=xterm-256color" >> $GITHUB_ENV
+
       - name: Build Kali ARM Image
         run: |
           cd kali-arm
@@ -30,11 +39,22 @@ jobs:
       - name: Debug: List Files in Images Directory
         run: ls -lah kali-arm/images || true
 
+      - name: Debug: Check Build Output
+        run: find kali-arm -type f
+
+      - name: Upload Build Logs (If Build Fails)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: kali-arm/build.log
+
       - name: Upload Built Image
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: kali-linux-raspberrypi
           path: kali-arm/images/*.img.xz
-          if-no-files-found: ignore
+          if-no-files-found: warn
           compression-level: 6
           overwrite: true
