@@ -72,11 +72,15 @@ jobs:
         run: |
           cd kali-arm
           sudo bash -x ./raspberry-pi.sh 2>&1 | tee build.log
-          # Find the exact image file
-          IMAGE_FILE=$(ls images/kali-linux-*-raspberrypi4.img | head -n 1)
+          # Debug: List all .img files and dir contents
+          echo "Listing all .img files in repo:"
+          find /home/runner/work -name "*.img"
+          echo "Contents of images/ dir:"
+          ls -la images/
+          # Find the image file (widen search if needed)
+          IMAGE_FILE=$(find . -name "kali-*.img" | head -n 1)
           if [ -z "$IMAGE_FILE" ]; then
-            echo "Error: No image file found in images/"
-            ls -la images/
+            echo "Error: No Kali image file found anywhere"
             exit 1
           fi
           echo "Found image: $IMAGE_FILE"
