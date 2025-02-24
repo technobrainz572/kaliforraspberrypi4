@@ -10,6 +10,13 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'  # Fetch submodules if your repo has them
+
+      - name: Clean Submodules
+        run: |
+          git submodule deinit -f . || true  # Force deinit, ignore if none exist
+          git submodule update --init --recursive || true  # Re-init cleanly
 
       - name: Install Base Dependencies
         run: |
@@ -28,7 +35,7 @@ jobs:
 
       - name: Clone Kali ARM Build Scripts
         run: |
-          git clone https://gitlab.com/kalilinux/build-scripts/kali-arm.git
+          git clone --recurse-submodules https://gitlab.com/kalilinux/build-scripts/kali-arm.git
           cd kali-arm
           chmod +x *.sh
 
@@ -42,9 +49,10 @@ jobs:
         run: |
           cd linux
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- bcm2711_defconfig
-          # Enable Bluetooth and Wi-Fi monitor mode/injection
+          # Enable Bluetooth (incl. CSR8510 A10) and Wi-Fi monitor mode/injection
           sed -i 's/# CONFIG_BT_HCIUART is not set/CONFIG_BT_HCIUART=y/' .config
           sed -i 's/# CONFIG_BT_HCIUART_H4 is not set/CONFIG_BT_HCIUART_H4=y/' .config
+          sed -i 's/# CONFIG_BT_HCIUSB is not set/CONFIG_BT_HCIUSB=y/' .config  # USB Bluetooth (CSR8510)
           echo "CONFIG_CFG80211=y" >> .config
           echo "CONFIG_MAC80211=y" >> .config
           echo "CONFIG_RFKILL=y" >> .config
@@ -65,9 +73,9 @@ jobs:
         run: |
           cd kali-arm
           sudo bash -x ./raspberry-pi.sh 2>&1 | tee build.log
-          # Replace default kernel with custom one
+          # Mount and replace kernel (adjust offset if needed)
           sudo mkdir -p /mnt/boot
-          sudo mount images/kali-linux-*-raspberrypi4.img /mnt/boot -o loop,offset=4194304
+          sudo mount -o loop,offset=4194304 images/kali-linux-*-raspberrypi4.img /mnt/boot || { echo "Mount failed, check offset"; exit 1; }
           sudo cp ../kernel-build/kernel8.img /mnt/boot/
           sudo cp ../kernel-build/*.dtb /mnt/boot/
           sudo cp -r ../kernel-build/overlays /mnt/boot/
@@ -78,14 +86,24 @@ jobs:
           cd kali-arm
           sudo systemd-nspawn -D chroot /bin/bash -c "
             apt update
-            apt install -y kali-linux-default aircrack-ng kismet bluez bluetooth bluez-tools btscanner
-            # Add drivers for external USB Wi-Fi/Bluetooth (example: Realtek)
-            apt install -y dkms
+            apt install -y kali-linux-default aircrack-ng kismet bluez bluetooth bluez-tools btscanner dkms
+            # Example driver for USB Wi-Fi (Realtek)
             git clone https://github.com/aircrack-ng/rtl8188eus.git
             cd rtl8188eus
             make
             make install
             modprobe 8188eu
+          "
+
+      - name: Install CSR Bluetooth Firmware
+        run: |
+          cd kali-arm
+          sudo systemd-nspawn -D chroot /bin/bash -c "
+            apt update
+            apt install -y firmware-linux firmware-linux-nonfree
+            mkdir -p /lib/firmware
+            wget -O /lib/firmware/BCM20702A0-0a12-0001.hcd \
+              'https://github.com/RPi-Distro/firmware-nonfree/raw/master/brcm/BCM20702A0-0a12-0001.hcd'
           "
 
       - name: Compress Image
