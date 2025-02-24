@@ -1,4 +1,4 @@
-name: Build Custom Kali ARM Image for Raspberry Pi 4
+name: Build Custom Kali ARM Image for Raspberry Pi 4 (64-bit)
 
 on:
   workflow_dispatch:
@@ -22,7 +22,8 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y git curl wget qemu-user-static debootstrap coreutils systemd-container gnupg \
-            build-essential bc kmod libncurses-dev libelf-dev libssl-dev bison flex crossbuild-essential-arm64
+            build-essential bc kmod libncurses-dev libelf-dev libssl-dev bison flex crossbuild-essential-arm64 \
+            parted xz-utils
 
       - name: Install kali-archive-keyring
         run: |
@@ -71,20 +72,21 @@ jobs:
       - name: Build Kali Image with Custom Kernel
         run: |
           cd kali-arm
-          sudo bash -x ./raspberry-pi.sh 2>&1 | tee build.log
-          # Debug: List all .img files and dir contents
+          sudo ARCH=arm64 bash -x ./raspberry-pi-64-bit.sh 2>&1 | tee build.log || { echo "Script failed, check build.log"; exit 1; }
+          echo "Disk usage:"
+          df -h
           echo "Listing all .img files in repo:"
           find /home/runner/work -name "*.img"
           echo "Contents of images/ dir:"
           ls -la images/
-          # Find the image file (widen search if needed)
           IMAGE_FILE=$(find . -name "kali-*.img" | head -n 1)
           if [ -z "$IMAGE_FILE" ]; then
-            echo "Error: No Kali image file found anywhere"
+            echo "Error: No Kali image file found"
+            echo "Last 20 lines of build.log:"
+            tail -n 20 build.log
             exit 1
           fi
           echo "Found image: $IMAGE_FILE"
-          # Calculate boot partition offset
           OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img1' | awk '{print $2 * 512}')
           if [ -z "$OFFSET" ]; then
             echo "Error: Could not determine offset, falling back to 4194304"
@@ -97,6 +99,14 @@ jobs:
           sudo cp ../kernel-build/*.dtb /mnt/boot/
           sudo cp -r ../kernel-build/overlays /mnt/boot/
           sudo umount /mnt/boot
+
+      - name: Upload Error Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-logs
+          path: kali-arm/build.log
+          if-no-files-found: warn
 
       - name: Install Pentesting Tools and Drivers
         run: |
