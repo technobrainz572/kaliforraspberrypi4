@@ -11,12 +11,12 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive'  # Fetch submodules if your repo has them
+          submodules: 'recursive'
 
       - name: Clean Submodules
         run: |
-          git submodule deinit -f . || true  # Force deinit, ignore if none exist
-          git submodule update --init --recursive || true  # Re-init cleanly
+          git submodule deinit -f . || true
+          git submodule update --init --recursive || true
 
       - name: Install Base Dependencies
         run: |
@@ -52,18 +52,18 @@ jobs:
           # Enable Bluetooth (incl. CSR8510 A10) and Wi-Fi monitor mode/injection
           sed -i 's/# CONFIG_BT_HCIUART is not set/CONFIG_BT_HCIUART=y/' .config
           sed -i 's/# CONFIG_BT_HCIUART_H4 is not set/CONFIG_BT_HCIUART_H4=y/' .config
-          sed -i 's/# CONFIG_BT_HCIUSB is not set/CONFIG_BT_HCIUSB=y/' .config  # USB Bluetooth (CSR8510)
+          sed -i 's/# CONFIG_BT_HCIUSB is not set/CONFIG_BT_HCIUSB=y/' .config
           echo "CONFIG_CFG80211=y" >> .config
           echo "CONFIG_MAC80211=y" >> .config
           echo "CONFIG_RFKILL=y" >> .config
-          echo "CONFIG_USB_STORAGE=y" >> .config  # For USB Wi-Fi/Bluetooth adapters
+          echo "CONFIG_USB_STORAGE=y" >> .config
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
 
       - name: Compile Custom Kernel
         run: |
           cd linux
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) Image modules dtbs
-          mkdir -p ../kernel-build
+          mkdir -p ../kernel-build/overlays  # Create overlays dir explicitly
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- INSTALL_MOD_PATH=../kernel-build modules_install
           cp arch/arm64/boot/Image ../kernel-build/kernel8.img
           cp arch/arm64/boot/dts/broadcom/*.dtb ../kernel-build/
@@ -73,7 +73,6 @@ jobs:
         run: |
           cd kali-arm
           sudo bash -x ./raspberry-pi.sh 2>&1 | tee build.log
-          # Mount and replace kernel (adjust offset if needed)
           sudo mkdir -p /mnt/boot
           sudo mount -o loop,offset=4194304 images/kali-linux-*-raspberrypi4.img /mnt/boot || { echo "Mount failed, check offset"; exit 1; }
           sudo cp ../kernel-build/kernel8.img /mnt/boot/
@@ -87,7 +86,6 @@ jobs:
           sudo systemd-nspawn -D chroot /bin/bash -c "
             apt update
             apt install -y kali-linux-default aircrack-ng kismet bluez bluetooth bluez-tools btscanner dkms
-            # Example driver for USB Wi-Fi (Realtek)
             git clone https://github.com/aircrack-ng/rtl8188eus.git
             cd rtl8188eus
             make
