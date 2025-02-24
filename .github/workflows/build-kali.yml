@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted  # Simple and matches GitHub’s setup
 
     steps:
       - name: Checkout Repository
