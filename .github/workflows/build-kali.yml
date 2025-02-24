@@ -5,9 +5,15 @@ on:
 
 jobs:
   build:
-    runs-on: self-hosted  # Simple and matches GitHub’s setup
+    runs-on: self-hosted
 
     steps:
+      - name: Install Git
+        run: |
+          sudo apt update
+          sudo apt install -y git
+          git --version  # Verify installation (should show 2.18+)
+
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
@@ -76,7 +82,7 @@ jobs:
           echo "Disk usage:"
           df -h
           echo "Listing all .img files in repo:"
-          find /home/runner/work -name "*.img"
+          find /home/syed/actions-runner/_work -name "*.img"
           echo "Contents of images/ dir:"
           ls -la images/
           IMAGE_FILE=$(find . -name "kali-*.img" | head -n 1)
