@@ -1,4 +1,4 @@
-name: Build Kali ARM Image
+name: Build Custom Kali ARM Image for Raspberry Pi 4
 
 on:
   workflow_dispatch:
@@ -11,10 +11,11 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Required Dependencies
+      - name: Install Base Dependencies
         run: |
           sudo apt update
-          sudo apt install -y git curl qemu-user-static debootstrap coreutils systemd-container gnupg
+          sudo apt install -y git curl wget qemu-user-static debootstrap coreutils systemd-container gnupg \
+            build-essential bc kmod libncurses-dev libelf-dev libssl-dev bison flex crossbuild-essential-arm64
 
       - name: Install kali-archive-keyring
         run: |
@@ -31,12 +32,66 @@ jobs:
           cd kali-arm
           chmod +x *.sh
 
-      - name: Run Raspberry Pi Build Script
+      - name: Clone Raspberry Pi Kernel Source
         run: |
-          export TERM=xterm
+          git clone --depth=1 --branch rpi-6.6.y https://github.com/raspberrypi/linux.git
+          cd linux
+          git checkout rpi-6.6.y
+
+      - name: Configure Custom Kernel for Pentesting
+        run: |
+          cd linux
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- bcm2711_defconfig
+          # Enable Bluetooth and Wi-Fi monitor mode/injection
+          sed -i 's/# CONFIG_BT_HCIUART is not set/CONFIG_BT_HCIUART=y/' .config
+          sed -i 's/# CONFIG_BT_HCIUART_H4 is not set/CONFIG_BT_HCIUART_H4=y/' .config
+          echo "CONFIG_CFG80211=y" >> .config
+          echo "CONFIG_MAC80211=y" >> .config
+          echo "CONFIG_RFKILL=y" >> .config
+          echo "CONFIG_USB_STORAGE=y" >> .config  # For USB Wi-Fi/Bluetooth adapters
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
+
+      - name: Compile Custom Kernel
+        run: |
+          cd linux
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- -j$(nproc) Image modules dtbs
+          mkdir -p ../kernel-build
+          make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- INSTALL_MOD_PATH=../kernel-build modules_install
+          cp arch/arm64/boot/Image ../kernel-build/kernel8.img
+          cp arch/arm64/boot/dts/broadcom/*.dtb ../kernel-build/
+          cp arch/arm64/boot/dts/overlays/*.dtbo ../kernel-build/overlays/
+
+      - name: Build Kali Image with Custom Kernel
+        run: |
           cd kali-arm
           sudo bash -x ./raspberry-pi.sh 2>&1 | tee build.log
-          exit ${PIPESTATUS[0]}
+          # Replace default kernel with custom one
+          sudo mkdir -p /mnt/boot
+          sudo mount images/kali-linux-*-raspberrypi4.img /mnt/boot -o loop,offset=4194304
+          sudo cp ../kernel-build/kernel8.img /mnt/boot/
+          sudo cp ../kernel-build/*.dtb /mnt/boot/
+          sudo cp -r ../kernel-build/overlays /mnt/boot/
+          sudo umount /mnt/boot
+
+      - name: Install Pentesting Tools and Drivers
+        run: |
+          cd kali-arm
+          sudo systemd-nspawn -D chroot /bin/bash -c "
+            apt update
+            apt install -y kali-linux-default aircrack-ng kismet bluez bluetooth bluez-tools btscanner
+            # Add drivers for external USB Wi-Fi/Bluetooth (example: Realtek)
+            apt install -y dkms
+            git clone https://github.com/aircrack-ng/rtl8188eus.git
+            cd rtl8188eus
+            make
+            make install
+            modprobe 8188eu
+          "
+
+      - name: Compress Image
+        run: |
+          cd kali-arm/images
+          xz -T0 -v *.img
 
       - name: Upload Build Logs
         uses: actions/upload-artifact@v4
@@ -48,6 +103,6 @@ jobs:
       - name: Upload Kali Linux Image
         uses: actions/upload-artifact@v4
         with:
-          name: kali-linux-raspberrypi
+          name: kali-linux-raspberrypi4-custom
           path: kali-arm/images/*.img.xz
-          if-no-files-found: warn
+          if-no-files-found: error
