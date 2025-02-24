@@ -23,7 +23,7 @@ jobs:
           sudo apt update
           sudo apt install -y git curl wget qemu-user-static debootstrap coreutils systemd-container gnupg \
             build-essential bc kmod libncurses-dev libelf-dev libssl-dev bison flex crossbuild-essential-arm64 \
-            parted xz-utils
+            parted xz-utils eatmydata mmdebstrap
 
       - name: Install kali-archive-keyring
         run: |
