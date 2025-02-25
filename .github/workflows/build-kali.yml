@@ -12,7 +12,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y git
-          git --version  # Verify installation (should show 2.18+)
+          git --version
 
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -93,18 +93,28 @@ jobs:
             exit 1
           fi
           echo "Found image: $IMAGE_FILE"
-          OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img1' | awk '{print $2 * 512}')
-          if [ -z "$OFFSET" ]; then
-            echo "Error: Could not determine offset, falling back to 4194304"
-            OFFSET=4194304
+          # Mount boot partition
+          BOOT_OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img1' | awk '{print $2 * 512}')
+          if [ -z "$BOOT_OFFSET" ]; then
+            echo "Error: Could not determine boot offset, falling back to 1048576"
+            BOOT_OFFSET=1048576
           fi
-          echo "Using offset: $OFFSET"
+          echo "Using boot offset: $BOOT_OFFSET"
           sudo mkdir -p /mnt/boot
-          sudo mount -o loop,offset=$OFFSET "$IMAGE_FILE" /mnt/boot || { echo "Mount failed with offset $OFFSET"; sudo fdisk -l "$IMAGE_FILE"; exit 1; }
+          sudo mount -o loop,offset=$BOOT_OFFSET "$IMAGE_FILE" /mnt/boot || { echo "Boot mount failed"; sudo fdisk -l "$IMAGE_FILE"; exit 1; }
           sudo cp ../kernel-build/kernel8.img /mnt/boot/
           sudo cp ../kernel-build/*.dtb /mnt/boot/
           sudo cp -r ../kernel-build/overlays /mnt/boot/
           sudo umount /mnt/boot
+          # Mount root partition
+          ROOT_OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img2' | awk '{print $2 * 512}')
+          if [ -z "$ROOT_OFFSET" ]; then
+            echo "Error: Could not determine root offset, falling back to 5242880"
+            ROOT_OFFSET=5242880  # Typical rootfs offset after 5M boot
+          fi
+          echo "Using root offset: $ROOT_OFFSET"
+          sudo mkdir -p /mnt/root
+          sudo mount -o loop,offset=$ROOT_OFFSET "$IMAGE_FILE" /mnt/root || { echo "Root mount failed"; sudo fdisk -l "$IMAGE_FILE"; exit 1; }
 
       - name: Upload Error Logs on Failure
         if: failure()
@@ -117,7 +127,7 @@ jobs:
       - name: Install Pentesting Tools and Drivers
         run: |
           cd kali-arm
-          sudo systemd-nspawn -D chroot /bin/bash -c "
+          sudo systemd-nspawn -D /mnt/root /bin/bash -c "
             apt update
             apt install -y kali-linux-default aircrack-ng kismet bluez bluetooth bluez-tools btscanner dkms
             git clone https://github.com/aircrack-ng/rtl8188eus.git
@@ -130,7 +140,7 @@ jobs:
       - name: Install CSR Bluetooth Firmware
         run: |
           cd kali-arm
-          sudo systemd-nspawn -D chroot /bin/bash -c "
+          sudo systemd-nspawn -D /mnt/root /bin/bash -c "
             apt update
             apt install -y firmware-linux firmware-linux-nonfree
             mkdir -p /lib/firmware
@@ -138,8 +148,9 @@ jobs:
               'https://github.com/RPi-Distro/firmware-nonfree/raw/master/brcm/BCM20702A0-0a12-0001.hcd'
           "
 
-      - name: Compress Image
+      - name: Cleanup Mounts and Compress Image
         run: |
+          sudo umount /mnt/root
           cd kali-arm/images
           xz -T0 -v *.img
 
