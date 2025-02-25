@@ -93,7 +93,6 @@ jobs:
             exit 1
           fi
           echo "Found image: $IMAGE_FILE"
-          # Mount boot partition
           BOOT_OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img1' | awk '{print $2 * 512}')
           if [ -z "$BOOT_OFFSET" ]; then
             echo "Error: Could not determine boot offset, falling back to 1048576"
@@ -106,15 +105,16 @@ jobs:
           sudo cp ../kernel-build/*.dtb /mnt/boot/
           sudo cp -r ../kernel-build/overlays /mnt/boot/
           sudo umount /mnt/boot
-          # Mount root partition
           ROOT_OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img2' | awk '{print $2 * 512}')
           if [ -z "$ROOT_OFFSET" ]; then
             echo "Error: Could not determine root offset, falling back to 5242880"
-            ROOT_OFFSET=5242880  # Typical rootfs offset after 5M boot
+            ROOT_OFFSET=5242880
           fi
           echo "Using root offset: $ROOT_OFFSET"
           sudo mkdir -p /mnt/root
           sudo mount -o loop,offset=$ROOT_OFFSET "$IMAGE_FILE" /mnt/root || { echo "Root mount failed"; sudo fdisk -l "$IMAGE_FILE"; exit 1; }
+          # Copy kernel modules into image
+          sudo cp -r ../kernel-build/lib/modules/* /mnt/root/lib/modules/
 
       - name: Upload Error Logs on Failure
         if: failure()
@@ -128,11 +128,12 @@ jobs:
         run: |
           cd kali-arm
           sudo systemd-nspawn -D /mnt/root /bin/bash -c "
+            apt clean
             apt update
             apt install -y kali-linux-default aircrack-ng kismet bluez bluetooth bluez-tools btscanner dkms
             git clone https://github.com/aircrack-ng/rtl8188eus.git
             cd rtl8188eus
-            make
+            make -j$(nproc)
             make install
             modprobe 8188eu
           "
@@ -141,6 +142,7 @@ jobs:
         run: |
           cd kali-arm
           sudo systemd-nspawn -D /mnt/root /bin/bash -c "
+            apt clean
             apt update
             apt install -y firmware-linux firmware-linux-nonfree
             mkdir -p /lib/firmware
