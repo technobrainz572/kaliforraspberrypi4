@@ -38,8 +38,7 @@ jobs:
           rm kali-archive-keyring_2024.1_all.deb
 
       - name: Set Safe TERM Variable
-        run: |
-          echo "TERM=xterm-256color" >> $GITHUB_ENV
+        run: echo "TERM=xterm-256color" >> $GITHUB_ENV
 
       - name: Clone Kali ARM Build Scripts
         run: |
@@ -75,14 +74,13 @@ jobs:
           cp arch/arm64/boot/Image ../kernel-build/kernel8.img
           cp arch/arm64/boot/dts/broadcom/*.dtb ../kernel-build/
           cp arch/arm64/boot/dts/overlays/*.dtbo ../kernel-build/overlays/
-          # Preserve kernel source for driver build
           cp -r . ../kernel-source
 
       - name: Build Kali Image with Custom Kernel
         run: |
           cd kali-arm
           sudo ARCH=arm64 bash -x ./raspberry-pi-64-bit.sh 2>&1 | tee build.log || { echo "Script failed, check build.log"; exit 1; }
-          echo "Disk usage:"
+          echo "Disk usage before resize:"
           df -h
           echo "Listing all .img files in repo:"
           find /home/syed/actions-runner/_work -name "*.img"
@@ -98,12 +96,7 @@ jobs:
           echo "Found image: $IMAGE_FILE"
           # Resize image to 20 GB
           sudo truncate -s 20G "$IMAGE_FILE"
-          sudo e2fsck -f "$IMAGE_FILE"
-          ROOT_OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img2' | awk '{print $2 * 512}')
-          if [ -z "$ROOT_OFFSET" ]; then
-            echo "Error: Could not determine root offset, falling back to 5242880"
-            ROOT_OFFSET=5242880
-          fi
+          sudo e2fsck -f -y "$IMAGE_FILE" || { echo "e2fsck failed even with -y"; sudo fdisk -l "$IMAGE_FILE"; exit 1; }
           sudo resize2fs -f -p "$IMAGE_FILE" || { sudo losetup -f "$IMAGE_FILE"; sudo resize2fs -f -p "$IMAGE_FILE"; }
           # Mount boot partition
           BOOT_OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img1' | awk '{print $2 * 512}')
@@ -119,12 +112,18 @@ jobs:
           sudo cp -r ../kernel-build/overlays /mnt/boot/
           sudo umount /mnt/boot
           # Mount root partition
+          ROOT_OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img2' | awk '{print $2 * 512}')
+          if [ -z "$ROOT_OFFSET" ]; then
+            echo "Error: Could not determine root offset, falling back to 5242880"
+            ROOT_OFFSET=5242880
+          fi
           echo "Using root offset: $ROOT_OFFSET"
           sudo mkdir -p /mnt/root
           sudo mount -o loop,offset=$ROOT_OFFSET "$IMAGE_FILE" /mnt/root || { echo "Root mount failed"; sudo fdisk -l "$IMAGE_FILE"; exit 1; }
-          # Copy kernel modules and source into image
           sudo cp -r ../kernel-build/lib/modules/* /mnt/root/lib/modules/
           sudo cp -r ../kernel-source /mnt/root/usr/src/linux
+          echo "Disk usage after resize:"
+          df -h
 
       - name: Upload Error Logs on Failure
         if: failure()
