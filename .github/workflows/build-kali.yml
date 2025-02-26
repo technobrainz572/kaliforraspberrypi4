@@ -48,8 +48,7 @@ jobs:
 
       - name: Clone Raspberry Pi Kernel Source
         run: |
-          # Increase Git buffer for large fetches
-          git config --global http.postBuffer 524288000  # 500 MB
+          git config --global http.postBuffer 524288000
           for i in {1..3}; do
             echo "Attempting clone (try $i of 3)..."
             git clone --depth=1 --branch rpi-6.6.y --progress https://github.com/raspberrypi/linux.git 2>&1 | tee clone.log && break
@@ -106,9 +105,30 @@ jobs:
             exit 1
           fi
           echo "Found image: $IMAGE_FILE"
+          # Resize image to 20 GB
           sudo truncate -s 20G "$IMAGE_FILE"
-          sudo e2fsck -f -y "$IMAGE_FILE" || { echo "e2fsck failed even with -y"; sudo fdisk -l "$IMAGE_FILE"; exit 1; }
-          sudo resize2fs -f -p "$IMAGE_FILE" || { sudo losetup -f "$IMAGE_FILE"; sudo resize2fs -f -p "$IMAGE_FILE"; }
+          # Update partition table with parted
+          sudo parted -s "$IMAGE_FILE" resizepart 2 100%
+          # Get root partition details
+          ROOT_OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img2' | awk '{print $2 * 512}')
+          if [ -z "$ROOT_OFFSET" ]; then
+            echo "Error: Could not determine root offset, falling back to 5242880"
+            ROOT_OFFSET=5242880
+          fi
+          echo "Root partition offset: $ROOT_OFFSET"
+          # Set up loop device for root partition
+          LOOP_DEV=$(sudo losetup -f --show -o "$ROOT_OFFSET" "$IMAGE_FILE")
+          if [ -z "$LOOP_DEV" ]; then
+            echo "Error: Failed to set up loop device"
+            sudo fdisk -l "$IMAGE_FILE"
+            exit 1
+          fi
+          echo "Loop device: $LOOP_DEV"
+          # Check and resize root filesystem
+          sudo e2fsck -f -y "$LOOP_DEV" || { echo "e2fsck failed"; sudo fdisk -l "$IMAGE_FILE"; sudo losetup -d "$LOOP_DEV"; exit 1; }
+          sudo resize2fs "$LOOP_DEV" || { echo "resize2fs failed"; sudo fdisk -l "$IMAGE_FILE"; sudo losetup -d "$LOOP_DEV"; exit 1; }
+          sudo losetup -d "$LOOP_DEV"
+          # Mount boot partition
           BOOT_OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img1' | awk '{print $2 * 512}')
           if [ -z "$BOOT_OFFSET" ]; then
             echo "Error: Could not determine boot offset, falling back to 1048576"
@@ -121,11 +141,7 @@ jobs:
           sudo cp ../kernel-build/*.dtb /mnt/boot/
           sudo cp -r ../kernel-build/overlays /mnt/boot/
           sudo umount /mnt/boot
-          ROOT_OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img2' | awk '{print $2 * 512}')
-          if [ -z "$ROOT_OFFSET" ]; then
-            echo "Error: Could not determine root offset, falling back to 5242880"
-            ROOT_OFFSET=5242880
-          fi
+          # Mount root partition
           echo "Using root offset: $ROOT_OFFSET"
           sudo mkdir -p /mnt/root
           sudo mount -o loop,offset=$ROOT_OFFSET "$IMAGE_FILE" /mnt/root || { echo "Root mount failed"; sudo fdisk -l "$IMAGE_FILE"; exit 1; }
@@ -174,7 +190,8 @@ jobs:
         run: |
           sudo umount /mnt/root
           cd kali-arm/images
-          xz -T0 -v *.img
+          sudo xz -T0 -v *.img
+          ls -la  # Verify .img.xz exists
 
       - name: Upload Build Logs
         uses: actions/upload-artifact@v4
