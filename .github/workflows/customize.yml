@@ -1,0 +1,74 @@
+name: Customize Kali Image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  customize:
+    runs-on: self-hosted
+    steps:
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git curl wget systemd-container xz-utils e2fsprogs
+          echo "Dependencies installed at $(date)"
+
+      - name: Prepare Base Image
+        run: |
+          IMAGE_FILE=/home/syed/kali-image-base/kali-base.img
+          if [ ! -f "$IMAGE_FILE" ]; then
+            echo "Error: Base image not found at $IMAGE_FILE"
+            echo "Please ensure the 'Build Base Kali Image' workflow has run successfully"
+            exit 1
+          fi
+          ROOT_OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img2' | awk '{print $2 * 512}')
+          if [ -z "$ROOT_OFFSET" ]; then
+            echo "Error: Could not determine root offset, falling back to 5242880"
+            ROOT_OFFSET=5242880
+          fi
+          echo "Using root offset: $ROOT_OFFSET"
+          sudo mkdir -p /mnt/root
+          sudo mount -o loop,offset=$ROOT_OFFSET "$IMAGE_FILE" /mnt/root || { echo "Root mount failed"; sudo fdisk -l "$IMAGE_FILE"; exit 1; }
+          echo "Base image prepared at $(date)"
+
+      - name: Install Pentesting Tools and Drivers
+        run: |
+          sudo systemd-nspawn -D /mnt/root /bin/bash -c "
+            apt clean
+            apt update
+            apt install -y kali-linux-default aircrack-ng kismet bluez bluez-tools btscanner dkms
+            git clone https://github.com/aircrack-ng/rtl8188eus.git
+            cd rtl8188eus
+            make -j$(nproc) KDIR=/usr/src/linux
+            make install KDIR=/usr/src/linux
+            modprobe 8188eu
+          "
+          echo "Pentesting tools installed at $(date)"
+
+      - name: Install CSR Bluetooth Firmware
+        run: |
+          sudo systemd-nspawn -D /mnt/root /bin/bash -c "
+            apt clean
+            apt update
+            apt install -y firmware-linux firmware-linux-nonfree
+            mkdir -p /lib/firmware
+            wget -O /lib/firmware/BCM20702A0-0a12-0001.hcd \
+              'https://github.com/RPi-Distro/firmware-nonfree/raw/master/brcm/BCM20702A0-0a12-0001.hcd'
+          "
+          echo "Bluetooth firmware installed at $(date)"
+
+      - name: Cleanup Mounts and Compress Image
+        run: |
+          sudo umount /mnt/root
+          cd /home/syed/kali-image-base
+          sudo xz -0 -T0 -v kali-base.img
+          ls -la
+          echo "Image compressed at $(date)"
+
+      - name: Upload Final Image
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kali-linux-raspberrypi4-custom
+          path: /home/syed/kali-image-base/kali-base.img.xz
+          if-no-files-found: error
