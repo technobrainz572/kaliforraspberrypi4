@@ -66,24 +66,36 @@ jobs:
 
       - name: Clone Raspberry Pi Kernel Source
         run: |
+          set -x  # Enable command tracing
           git config --global http.postBuffer 524288000
           git config --global core.compression 0
           git config --global http.lowSpeedLimit 1000
-          git config --global http.lowSpeedTime 30
+          git config --global http.lowSpeedTime 60
+          mkdir -p linux
+          cd linux
+          git init
+          git remote add origin https://github.com/raspberrypi/linux.git
           for i in 1 2 3; do
             echo "Attempting clone (try $i of 3) at $(date)"
-            git clone --depth=1 --branch rpi-6.6.y --progress https://github.com/raspberrypi/linux.git 2>&1 | tee -a clone.log && break
+            git fetch --depth=1 origin rpi-6.6.y 2>&1 | tee -a ../clone.log && git checkout rpi-6.6.y && break
             echo "Clone attempt $i failed at $(date), retrying in 10 seconds..."
             sleep 10
           done
-          if [ ! -d "linux" ]; then
+          if [ ! -f Makefile ]; then
             echo "Error: Failed to clone kernel repo after 3 attempts at $(date)"
-            cat clone.log
-            exit 1
+            cat ../clone.log
+            echo "Falling back to local tarball..."
+            cd ..
+            wget -O linux.tar.gz https://github.com/raspberrypi/linux/archive/refs/heads/rpi-6.6.y.tar.gz
+            tar -xzf linux.tar.gz
+            mv linux-rpi-6.6.y linux
+            cd linux
+            git init
+            git add .
+            git commit -m "Imported rpi-6.6.y from tarball"
+            git branch -M rpi-6.6.y
           fi
-          cd linux
-          git checkout rpi-6.6.y
-          echo "Kernel source cloned at $(date)"
+          echo "Kernel source ready at $(date)"
 
       - name: Configure Custom Kernel for Pentesting
         run: |
@@ -182,7 +194,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-logs-base
-          path: kali-arm/build.log
+          path: |
+            kali-arm/build.log
+            clone.log
           if-no-files-found: warn
 
   customize-image:
