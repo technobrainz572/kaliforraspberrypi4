@@ -52,8 +52,9 @@ jobs:
             apt update
             apt install -y firmware-linux firmware-linux-nonfree
             mkdir -p /lib/firmware
-            wget -O /lib/firmware/BCM20702A0-0a12-0001.hcd \
-              'https://github.com/RPi-Distro/firmware-nonfree/raw/master/brcm/BCM20702A0-0a12-0001.hcd'
+            wget -O /lib/firmware/BCM20702A1-0a5c-21e8.hcd \
+              'https://github.com/RPi-Distro/firmware-nonfree/raw/main/brcm/BCM20702A1-0a5c-21e8.hcd' || \
+              echo 'Warning: Bluetooth firmware download failed; install manually if needed'
           "
           echo "Bluetooth firmware installed at $(date)"
 
