@@ -37,6 +37,7 @@ jobs:
           # Set up kernel headers symlink
           sudo mkdir -p /mnt/root/lib/modules/6.6.78-v8+
           sudo ln -sf /usr/src/linux /mnt/root/lib/modules/6.6.78-v8+/build
+          ls -l /mnt/root/lib/modules/6.6.78-v8+/build  # Verify symlink
           echo "Base image prepared at $(date)"
 
       - name: Install Pentesting Tools and Drivers
@@ -45,10 +46,11 @@ jobs:
             apt clean
             apt update
             apt install -y kali-linux-default aircrack-ng kismet bluez bluez-tools btscanner dkms build-essential
+            rm -rf rtl8188eus  # Clean existing dir if present
             git clone https://github.com/aircrack-ng/rtl8188eus.git
             cd rtl8188eus
-            make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KDIR=/lib/modules/6.6.78-v8+/build
-            make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KDIR=/lib/modules/6.6.78-v8+/build install
+            make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KERNELDIR=/lib/modules/6.6.78-v8+/build
+            make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KERNELDIR=/lib/modules/6.6.78-v8+/build install
             depmod -a 6.6.78-v8+
             modprobe 8188eu
           "
