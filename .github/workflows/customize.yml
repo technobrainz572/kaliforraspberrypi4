@@ -29,6 +29,9 @@ jobs:
           echo "Using root offset: $ROOT_OFFSET"
           sudo mkdir -p /mnt/root
           sudo mount -o loop,offset=$ROOT_OFFSET "$IMAGE_FILE" /mnt/root || { echo "Root mount failed"; sudo fdisk -l "$IMAGE_FILE"; exit 1; }
+          # Set up kernel headers symlink
+          sudo mkdir -p /mnt/root/lib/modules/6.6.78-v8+
+          sudo ln -sf /usr/src/linux /mnt/root/lib/modules/6.6.78-v8+/build
           echo "Base image prepared at $(date)"
 
       - name: Install Pentesting Tools and Drivers
@@ -36,11 +39,12 @@ jobs:
           sudo systemd-nspawn -D /mnt/root /bin/bash -c "
             apt clean
             apt update
-            apt install -y kali-linux-default aircrack-ng kismet bluez bluez-tools btscanner dkms
+            apt install -y kali-linux-default aircrack-ng kismet bluez bluez-tools btscanner dkms build-essential
             git clone https://github.com/aircrack-ng/rtl8188eus.git
             cd rtl8188eus
-            make -j$(nproc) KDIR=/usr/src/linux
-            make install KDIR=/usr/src/linux
+            make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KDIR=/lib/modules/6.6.78-v8+/build
+            make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- KDIR=/lib/modules/6.6.78-v8+/build install
+            depmod -a 6.6.78-v8+
             modprobe 8188eu
           "
           echo "Pentesting tools installed at $(date)"
