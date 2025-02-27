@@ -10,7 +10,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt update
-          sudo apt install -y git curl wget systemd-container xz-utils e2fsprogs build-essential
+          sudo apt install -y git curl wget systemd-container xz-utils e2fsprogs
           echo "Dependencies installed at $(date)"
 
       - name: Prepare Base Image
@@ -21,7 +21,6 @@ jobs:
             echo "Please ensure the 'Build Base Kali Image' workflow has run successfully"
             exit 1
           fi
-          # Check and unmount if already mounted
           if mountpoint -q /mnt/root; then
             echo "Unmounting existing /mnt/root at $(date)"
             sudo umount /mnt/root || { echo "Unmount failed"; exit 1; }
@@ -36,21 +35,6 @@ jobs:
           sudo mount -o loop,offset=$ROOT_OFFSET "$IMAGE_FILE" /mnt/root || { echo "Root mount failed"; sudo fdisk -l "$IMAGE_FILE"; exit 1; }
           ls -ld /mnt/root/usr/src/linux  # Verify kernel source
           echo "Base image prepared at $(date)"
-
-      - name: Build and Install RTL8188eus Driver
-        run: |
-          # Build on host using image's kernel headers
-          rm -rf rtl8188eus
-          git clone https://github.com/aircrack-ng/rtl8188eus.git
-          cd rtl8188eus
-          make -j$(nproc) -C /mnt/root/usr/src/linux M=$(pwd) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- modules
-          sudo mkdir -p /mnt/root/lib/modules/6.6.78-v8+/kernel/drivers/net/wireless/
-          sudo cp 8188eu.ko /mnt/root/lib/modules/6.6.78-v8+/kernel/drivers/net/wireless/
-          sudo systemd-nspawn -D /mnt/root /bin/bash -c "
-            depmod -a 6.6.78-v8+
-            modprobe 8188eu
-          "
-          echo "RTL8188eus driver installed at $(date)"
 
       - name: Install Pentesting Tools
         run: |
