@@ -21,6 +21,11 @@ jobs:
             echo "Please ensure the 'Build Base Kali Image' workflow has run successfully"
             exit 1
           fi
+          # Check and unmount if already mounted
+          if mountpoint -q /mnt/root; then
+            echo "Unmounting existing /mnt/root at $(date)"
+            sudo umount /mnt/root || { echo "Unmount failed"; exit 1; }
+          fi
           ROOT_OFFSET=$(sudo fdisk -l "$IMAGE_FILE" | grep -m1 'img2' | awk '{print $2 * 512}')
           if [ -z "$ROOT_OFFSET" ]; then
             echo "Error: Could not determine root offset, falling back to 5242880"
